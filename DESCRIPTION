@@ -1,0 +1,16 @@
+Package: myutils
+Title: Convenience utilities
+Version: 0.1
+Authors@R: person("Shyam", "Saladi", email = "saladi@caltech.edu",
+                  role = c("aut", "cre"))
+Description: Provides a set of convenience utilities to support the machine
+    learning project by mechanizing some tedious or repetitive tasks/code.
+Depends:
+    R (>= 3.1.0)
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Imports:
+    dplyr,
+    magrittr
+RoxygenNote: 5.0.1.9000
