@@ -11,6 +11,12 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 Imports:
-    dplyr,
-    magrittr
+    magrittr,
+    tidyverse,
+    caret,
+    pROC,
+    foreach,
+    grid,
+    boot,
+    parallel
 RoxygenNote: 5.0.1.9000
