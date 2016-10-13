@@ -1,6 +1,8 @@
 # A set of functions written to make data munging and preparation easier
 #' @import magrittr
 #' @import ggplot2
+#' @importFrom grid convertUnit
+#' @importFrom grid gpar
 #' @importFrom foreach foreach
 
 # necessary for PPV (e.g. Figure 2B)
@@ -295,10 +297,10 @@ find_cell <- function(table, row, col, name="core-fg") {
 change_cell <- function(table, row, col, name="core",
                         tnew=NA, bnew=NA, lnew=NA, rnew=NA, znew=TRUE) {
     l <- table$layout
-    
+
     ind_fg = which(l$t == row & l$l == col & l$name == paste0(name, '-fg'))
     ind_bg = which(l$t == row & l$l == col & l$name == paste0(name, '-bg'))
-    
+
     if (!is.na(tnew)) {
         table$layout[ind_fg, 't'] <- tnew
         table$layout[ind_bg, 't'] <- tnew
@@ -321,4 +323,127 @@ change_cell <- function(table, row, col, name="core",
         table$layout[ind_bg, 'z'] <- zpos
     }
     table
+}
+
+# adjustment for logticks on the outside and 
+# no tickmarks outside the plotted area
+# https://groups.google.com/forum/#!topic/ggplot2/OlGA8Gm9O7w
+GeomLogticks2 <- ggproto("GeomLogticks", Geom,
+  extra_params = "",
+  handle_na = function(data, params) {
+    data
+  },
+
+  draw_panel = function(data, panel_scales, coord, base = 10, sides = "bl",
+    scaled = TRUE, short = unit(0.1, "cm"), mid = unit(0.2, "cm"),
+    long = unit(0.3, "cm"), lineend = "butt")
+  {
+    ticks <- list()
+
+    # Convert these units to numbers so that they can be put in data frames
+    short <- convertUnit(short, "cm", valueOnly = TRUE)
+    mid   <- convertUnit(mid,   "cm", valueOnly = TRUE)
+    long  <- convertUnit(long,  "cm", valueOnly = TRUE)
+
+    if (grepl("[b|t]", sides)) {
+
+      # Get positions of x tick marks
+      xticks <- ggplot2:::calc_logticks(
+        base = base,
+        minpow = floor(panel_scales$x.range[1]),
+        maxpow = ceiling(panel_scales$x.range[2]),
+        start = 0,
+        shortend = short,
+        midend = mid,
+        longend = long
+      )
+
+      if (scaled)
+        xticks$value <- log(xticks$value, base)
+
+      # adapted from 
+      # https://groups.google.com/forum/#!topic/ggplot2/OlGA8Gm9O7w
+      xticks <- with(xticks, xticks[value > panel_scales$x.range[[1]] &
+                                        value < panel_scales$x.range[[2]],])
+
+      names(xticks)[names(xticks) == "value"] <- "x"   # Rename to 'x' for coordinates$transform
+      xticks <- coord$transform(xticks, panel_scales)
+      
+      # Make the grobs
+      if (grepl("b", sides)) {
+        ticks$x_b <- with(data, segmentsGrob(
+          x0 = unit(xticks$x, "native"), x1 = unit(xticks$x, "native"),
+          y0 = unit(xticks$start, "cm"), y1 = unit(xticks$end, "cm"),
+          gp = gpar(col = alpha(colour, alpha), lty = linetype, lwd = size * .pt,
+                    lineend = lineend)
+        ))
+      }
+      if (grepl("t", sides)) {
+        ticks$x_t <- with(data, segmentsGrob(
+          x0 = unit(xticks$x, "native"), x1 = unit(xticks$x, "native"),
+          y0 = unit(1, "npc") - unit(xticks$start, "cm"), y1 = unit(1, "npc") - unit(xticks$end, "cm"),
+          gp = gpar(col = alpha(colour, alpha), lty = linetype, lwd = size * .pt,
+                    lineend = lineend)
+        ))
+      }
+    }
+
+
+    if (grepl("[l|r]", sides)) {
+      yticks <- ggplot2:::calc_logticks(
+        base = base,
+        minpow = floor(panel_scales$y.range[1]),
+        maxpow = ceiling(panel_scales$y.range[2]),
+        start = 0,
+        shortend = short,
+        midend = mid,
+        longend = long
+      )
+
+      if (scaled)
+        yticks$value <- log(yticks$value, base)
+
+      names(yticks)[names(yticks) == "value"] <- "y"   # Rename to 'y' for coordinates$transform
+      yticks <- coord$transform(yticks, panel_scales)
+
+      # Make the grobs
+      if (grepl("l", sides)) {
+        ticks$y_l <- with(data, segmentsGrob(
+          y0 = unit(yticks$y, "native"), y1 = unit(yticks$y, "native"),
+          x0 = unit(yticks$start, "cm"), x1 = unit(yticks$end, "cm"),
+          gp = gpar(col = alpha(colour, alpha), lty = linetype, lwd = size * .pt,
+                    lineend = lineend)
+        ))
+      }
+      if (grepl("r", sides)) {
+        ticks$y_r <- with(data, segmentsGrob(
+          y0 = unit(yticks$y, "native"), y1 = unit(yticks$y, "native"),
+          x0 = unit(1, "npc") - unit(yticks$start, "cm"), x1 = unit(1, "npc") - unit(yticks$end, "cm"),
+          gp = gpar(col = alpha(colour, alpha), lty = linetype, lwd = size * .pt,
+                    lineend = lineend)
+        ))
+      }
+    }
+
+    gTree(children = do.call("gList", ticks))
+  },
+
+  default_aes = aes(colour = "black", size = 0.5, linetype = 1, alpha = 1)
+)
+
+#' @export
+annotation_logticks2 <-
+    function(base = 10, sides = "bl", scaled = TRUE, short = unit(0.1, "cm"),
+            mid = unit(0.2, "cm"), long = unit(0.3, "cm"), colour = "black",
+            size = 0.5, linetype = 1, alpha = 1, color = NULL, lineend = "butt",
+            ...) {
+    if (!is.null(color)) 
+        colour <- color
+    layer(data = data.frame(x = NA), mapping = NULL, stat = StatIdentity,
+          geom = GeomLogticks2, position = PositionIdentity, show.legend = FALSE,
+          inherit.aes = FALSE,
+          params = list(base = base, sides = sides,
+                        scaled = scaled, short = short, mid = mid, long = long,
+                        colour = colour, size = size, linetype = linetype,
+                        alpha = alpha, lineend = lineend, ...))
 }

@@ -2,6 +2,7 @@
 #' @import magrittr
 #' @import tidyverse
 #' @import caret
+#' @import data.table
 #' @importFrom pROC roc ci.auc
 #' @importFrom foreach foreach
 #' @importFrom grid polygonGrob
@@ -53,11 +54,6 @@ write_dataset <-
 #' @export
 calc_performance <- function(df, score_col, outcome_col,
                              subgrp_col, group_col) {
-    require(foreach)
-    require(reshape2)
-    require(dplyr)
-    require(magrittr)
-    
     cor_df <- foreach(thisgrouping = unique(df[, subgrp_col] %>% unlist),
                       .combine = bind_rows, .multicombine = TRUE) %dopar% {
                           thisgroup <- filter(df, grouping == thisgrouping)
@@ -106,6 +102,16 @@ fd_bw <- function(x) {
     2 * IQR(x) * length(x) ^ (-1/3)
 }
 
+# http://stats.stackexchange.com/a/143447/62183
+nclass.FD <- function(x) {
+    h <- stats::IQR(x)
+    if (h == 0) 
+        h <- stats::mad(x, constant = 2)
+    if (h > 0) 
+        ceiling(diff(range(x))/(2 * h * length(x) ^ (-1/3)))
+    else 1L
+}
+
 #' @export
 level_ranks <- function(x, extra_starting_level = FALSE) {
     x <- as.numeric(factor(x))
@@ -147,7 +153,6 @@ spearman_95ci <- function(spearman, nobs) {
 
 #' @export
 estimate_overlap <- function(A, B, method = 'locfit', n.grid = 2 ^ 13) {
-    require(gss)
     # if both values are only positive
     # take the log
     #     if(all(A >= 0) & all(A >= 0)) {
@@ -170,6 +175,7 @@ estimate_overlap <- function(A, B, method = 'locfit', n.grid = 2 ^ 13) {
     mesh <- seq(range_all[[1]], range_all[[2]], length = n.grid)
 
     if (method == 'gss') {
+        require(gss)
         # fit each density independently, set extent with `domain`
         fitA <- gss::ssden(~A, domain = data.frame(A = range_all))
         fitB <- gss::ssden(~B, domain = data.frame(B = range_all))
@@ -178,10 +184,12 @@ estimate_overlap <- function(A, B, method = 'locfit', n.grid = 2 ^ 13) {
         densityA <- gss::dssden(fitA, mesh)
         densityB <- gss::dssden(fitB, mesh)
     } else if (method == 'locfit') {
+        require(locfit)
         # calculate density at each grid point
         densityA <- locfit::density.lf(A, ev = mesh, maxit = 10000)$y
         densityB <- locfit::density.lf(B, ev = mesh, maxit = 10000)$y
     } else if (method == 'logspline') {
+        require(logspline)
         # Doesn't work for edge cases, e.g. freqens
         #       tryCatch({
         fitA <- logspline::logspline(A)
@@ -271,8 +279,6 @@ find_closest <- function(col, vals) {
 
 #' @export
 my_roc <- function(...) {
-    require(pROC)
-    require(dplyr)
     pROC_outcome <- roc(...)
     pROC_outcome$ppv <- foreach(thisthreshold = pROC_outcome$thresholds,
                                 .combine = c, .multicombine = TRUE) %dopar% {
