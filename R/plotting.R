@@ -448,15 +448,16 @@ annotation_logticks2 <-
                         alpha = alpha, lineend = lineend, ...))
     }
 
-
-ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL, 
+#' modified from GGally package
+#' @export
+ggcorr <- function(data, method = c("pairwise", "pearson"), cor_matrix = NULL, 
           nbreaks = NULL, digits = 2, name = "", low = "#3B9AB2", mid = "#EEEEEE", 
           high = "#F21A00", midpoint = 0, palette = NULL, geom = "tile", 
           min_size = 2, max_size = 6, label = FALSE, label_alpha = FALSE, 
-          label_color = "black", label_round = 1, label_size = 4, limits = c(-1, 
-                                                                             1), drop = is.null(limits) || identical(limits, FALSE), 
-          layout.exp = 0, legend.position = "right", legend.size = 9, 
-          ...) 
+          label_color = "black", label_round = 1, label_size = 4,
+          limits = c(-1,  1), drop = is.null(limits) || identical(limits, FALSE),
+          layout.exp = 0, legend.position = "right", title.position = "top", legend.size = 9,
+          diagColors = NULL, ...) 
 {
     if (is.numeric(limits)) {
         if (length(limits) != 2) {
@@ -471,8 +472,7 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
             limits <- NULL
         }
     }
-    if (length(geom) > 1 || !geom %in% c("blank", "circle", "text", 
-                                         "tile")) {
+    if (length(geom) > 1 || !geom %in% c("blank", "circle", "text", "tile")) {
         stop("incorrect geom value")
     }
     if (length(method) == 1) {
@@ -493,16 +493,12 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
         cor_matrix = cor(data, use = method[1], method = method[2])
     }
     m = cor_matrix
-    colnames(m) = rownames(m) = gsub(" ", "_", colnames(m))
-    m = data.frame(m * lower.tri(m))
-    rownames(m) = names(m)
-    m$.ggally_ggcorr_row_names = rownames(m)
-    m = reshape2::melt(m, id.vars = ".ggally_ggcorr_row_names")
+    m = reshape2::melt(m * lower.tri(m))
     names(m) = c("x", "y", "coefficient")
     m$coefficient[m$coefficient == 0] = NA
     if (!is.null(nbreaks)) {
         x = seq(-1, 1, length.out = nbreaks + 1)
-        if (!nbreaks%%2) {
+        if (!nbreaks %% 2) {
             x = sort(c(x, 0))
         }
         m$breaks = cut(m$coefficient, breaks = unique(x), include.lowest = TRUE, 
@@ -518,8 +514,9 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
     if (geom == "tile") {
         if (is.null(nbreaks)) {
             p = p + geom_tile(aes(
-                fill = coefficient, height = abs(coefficient),
-                width = abs(coefficient)), color = "white")
+                fill = coefficient#, height = abs(coefficient),
+               # width = abs(coefficient)
+                ), color = "white")
         }
         else {
             p = p + geom_tile(aes(fill = breaks), color = "white")
@@ -564,11 +561,11 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
         else if (is.null(palette)) {
             x = colorRampPalette(c(low, mid, high))(length(levels(m$breaks)))
             p = p + scale_color_manual(name, values = x, drop = drop) + 
-                guides(color = guide_legend(override.aes = r))
+                guides(color = guide_legend(override.aes = r, title.position = title.position))
         }
         else {
             p = p + scale_color_brewer(name, palette = palette, 
-                                       drop = drop) + guides(color = guide_legend(override.aes = r))
+                                       drop = drop) + guides(color = guide_legend(override.aes = r, title.position = title.position))
         }
     }
     else if (geom == "text") {
@@ -614,6 +611,10 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
     textData <- m[m$x == m$y & is.na(m$coefficient), ]
     xLimits <- levels(textData$y)
     textData$diagLabel <- textData$x
+    if (!is.null(diagColors)) {
+        textData <- left_join(textData, diagColors, by = c("x" = "feature"))
+    }
+    print(textData)
     if (!is.numeric(layout.exp) || layout.exp < 0) {
         stop("incorrect layout.exp value")
     }
@@ -626,11 +627,21 @@ ggcorr <- function (data, method = c("pairwise", "pearson"), cor_matrix = NULL,
         textData$diagLabel[1:layout.exp] <- NA
         xLimits <- c(spacer, levels(m$y))
     }
-    p = p + geom_text(data = textData, aes_string(label = "diagLabel"), 
-                      ..., na.rm = TRUE) + scale_x_discrete(breaks = NULL, 
-                                                            limits = xLimits) + scale_y_discrete(breaks = NULL, limits = levels(m$y)) + 
-        labs(x = NULL, y = NULL) + coord_equal() + theme(panel.background = element_blank(), 
-                                                         legend.key = element_blank(), legend.position = legend.position, 
-                                                         legend.title = element_text(size = legend.size), legend.text = element_text(size = legend.size))
+    if (is.null(diagColors)) {
+        p = p + geom_text(data = textData, aes_string(label = "diagLabel"), ..., 
+                      na.rm = TRUE)
+    } else {
+        p = p + geom_text(data = textData,
+                          aes_string(label = "diagLabel", color = "colorgrp"),
+                          ..., na.rm = TRUE)
+    }
+    p = p +
+        scale_x_discrete(breaks = NULL, limits = xLimits) +
+        scale_y_discrete(breaks = NULL, limits = levels(m$y)) + 
+        labs(x = NULL, y = NULL) + coord_equal() +
+        theme(panel.background = element_blank(), 
+              legend.key = element_blank(), legend.position = legend.position,
+              legend.title = element_text(size = legend.size),
+              legend.text = element_text(size = legend.size))
     return(p)
 }

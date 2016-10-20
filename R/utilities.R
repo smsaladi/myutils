@@ -420,3 +420,38 @@ svmlight.file <- function(x, train = FALSE, ...)
     }
     return(erg)
 }
+
+#' @export
+great_eq <- function(cond, data) {
+    if (is.na(data)) {
+        is.na(cond)
+    } else {
+        data >= cond
+    }
+}
+
+#' @export
+less_eq <- function(cond, data) {
+    if (is.na(data)) {
+        is.na(cond)
+    } else {
+        data <= cond
+    }
+}
+
+#' @export
+eq_fun <- function(cond, data) {
+    if (is.na(cond)) {
+        is.na(data)
+    } else {
+        data == cond
+    }
+}
+
+#' @export
+ne_fun <- function(cond, data) {
+    if (any(is.na(cond)) | any(is.na(data))) {
+        stop("NA handling not implemented")
+    }
+    data != cond
+}
