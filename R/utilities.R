@@ -26,7 +26,7 @@ write_dataset <-
                 as.matrix %>%
                 svmlight.file %>%
                 data.frame %>%
-                cbind(save_cols, .)
+                bind_cols(save_cols, .)
         }
         
         if (!is.null(feature_select) && !features_for_training) {
@@ -49,6 +49,10 @@ write_dataset <-
             data_fn
         }
     }
+
+#' @export
+count_uniq <- function(x)
+    length(unique(x))
 
 ## Used for model training
 #' @export
@@ -109,7 +113,8 @@ nclass.FD <- function(x) {
         h <- stats::mad(x, constant = 2)
     if (h > 0) 
         ceiling(diff(range(x))/(2 * h * length(x) ^ (-1/3)))
-    else 1L
+    else
+        1L
 }
 
 #' @export
@@ -130,9 +135,9 @@ level_ranks <- function(x, extra_starting_level = FALSE) {
 ConDis.matrix2 <- function(Y1, Y2)
 {
     n <- length(Y1)
-    foreach(i = 1:n, .combine = c) %do% {
+    foreach(i = 1:n, .combine = c) %dopar% {
         # changed bounds from 1:n to i:n
-        foreach(j = i:n, .combine = c) %do% {
+        foreach(j = i:n, .combine = c) %:% {
             ifelse((Y1[i] > Y1[j] & Y2[i] > Y2[j]) |
                        (Y1[i] < Y1[j] & Y2[i] < Y2[j]), 1,
                    ifelse((Y1[i] < Y1[j] & Y2[i] > Y2[j]) |
@@ -228,14 +233,16 @@ perc_rank_single <- function(x, xo) {
 #' @export
 calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
                          score_col = "score", method = "auc") {
-    foreach(this_group = select_(data, grouping_col) %>% distinct %>% unlist,
-            .combine = bind_rows, .multicombine = TRUE) %do% {
+    foreach(this_group = data %>% distinct_(grouping_col) %>% unlist,
+            .combine = bind_rows, .multicombine = TRUE) %dopar% {
+                
         this_subset <- data[data[, grouping_col] %>% unlist == this_group, ]
+        thresholds <- this_subset[, outcome_col] %>%
+            unlist %>% unique %>% rem_extrema(max = FALSE)
 
         # within each grouping and go through each activity
-        foreach(this_threshold = this_subset[, outcome_col] %>%
-                    unlist %>% unique %>% rem_extrema(max = FALSE),
-                .combine = bind_rows, .multicombine = TRUE) %dopar% {
+        foreach(this_threshold = thresholds,
+                .combine = bind_rows, .multicombine = TRUE) %do% {
             # take all activities greater than the current one as true
             this_response <- 
                 this_subset[, outcome_col] %>% unlist >= this_threshold

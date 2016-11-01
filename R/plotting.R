@@ -1,8 +1,7 @@
 # A set of functions written to make data munging and preparation easier
+#' @import grid
 #' @import magrittr
 #' @import ggplot2
-#' @importFrom grid convertUnit
-#' @importFrom grid gpar
 #' @importFrom foreach foreach
 
 # necessary for PPV (e.g. Figure 2B)
@@ -17,23 +16,30 @@ prep_for_polygon <-
 
     # top of polygon
     df$y_greater_min <- df[,y] > min_y_val
-    df <- df[seq_len(nrow(df)) %>% rep(each = 2) %>% tail(-1) %>% head(-1),]
+    df <- df[seq_len(nrow(df)) %>% rep(each = 2L) %>% tail(-1L) %>% head(-1L),]
     rownames(df) <- seq(length = nrow(df))
-    df$id <-  rep(seq(nrow(df)/2), each = 2)
+    df$id <-  rep(seq(nrow(df)/2), each = 2L)
     df$type <- y
 
     # bottom of polygon
-    df <- df[rep(seq_len(nrow(df)), each = 2),]
+    df <- df[rep(seq_len(nrow(df)), each = 2L),]
     df[grepl(".1", rownames(df), fixed = TRUE),]$type <- min_y
     df[df$type == min_y, y] <- min_y_val
 
     # order for geom_polygon (needs to be closed)
-    foreach(thisid = unique(df$id), .combine = rbind) %do% {
+    foreach(thisid = unique(df$id),
+            .combine = bind_rows, .multicombine = TRUE) %do% {
         thisdata <- filter(df, id == thisid)
         thisdata <-
             thisdata[order(thisdata[, x], thisdata[,y], decreasing = TRUE),]
-        rbind(thisdata[1,], thisdata[2,], thisdata[4,], thisdata[3,])
+        bind_rows(thisdata[1L,], thisdata[2L,], thisdata[4L,], thisdata[3L,])
     }
+    # df %>%
+    #     group_by(id) %>%
+    #     do({
+    #         thisdata <- .[order(.[, x], .[,y], decreasing = TRUE),]
+    #         bind_rows(thisdata[1,], thisdata[2,], thisdata[4,], thisdata[3,])
+    #     })
 }
 
 
@@ -45,7 +51,7 @@ GeomStepHist <-
 
                 n <- nrow(data)
                 i <- rep(1:n, each = 2)
-                newdata <- rbind(
+                newdata <- bind_rows(
                     transform(data[1, ], x = x - width/2, y = 0),
                     transform(data[i, ],
                               x = c(rbind(data$x - data$width/2,
@@ -130,10 +136,10 @@ GeomViolin2 <-
                 data <- transform(data,
                                   xminv = x - violinwidth * (x - xmin),
                                   xmaxv = x + violinwidth * (xmax - x))
-                newdata <- rbind(
+                newdata <- bind_rows(
                     plyr::arrange(transform(data, x = xminv), y),
                     plyr::arrange(transform(data, x = xmaxv), -y))
-                newdata <- rbind(newdata, newdata[1,])
+                newdata <- bind_rows(newdata, newdata[1,])
                 if (length(draw_quantiles) > 0) {
                     stopifnot(all(draw_quantiles >= 0),
                               all(draw_quantiles <= 1))
@@ -620,7 +626,7 @@ ggcorr <- function(data, method = c("pairwise", "pearson"), cor_matrix = NULL,
     }
     else if (layout.exp > 0) {
         layout.exp <- as.integer(layout.exp)
-        textData <- rbind(textData[1:layout.exp, ], textData)
+        textData <- bind_rows(textData[1:layout.exp, ], textData)
         spacer <- paste(".ggally_ggcorr_spacer_value", 1:layout.exp, 
                         sep = "")
         textData$x[1:layout.exp] <- spacer
@@ -644,4 +650,39 @@ ggcorr <- function(data, method = c("pairwise", "pearson"), cor_matrix = NULL,
               legend.title = element_text(size = legend.size),
               legend.text = element_text(size = legend.size))
     return(p)
+}
+
+#' 2006 Author Hideaki Shimazaki
+#' Department of Physics, Kyoto University
+#' shimazaki at ton.scphys.kyoto-u.ac.jp
+#' http://toyoizumilab.brain.riken.jp/hideaki/res/histogram.html
+#' @export
+ss_bins <- function(x) {
+    
+    N <- 2:100
+    C <- numeric(length(N))
+    D <- C
+    
+    for (i in 1:length(N)) {
+        D[i] <- diff(range(x))/N[i]
+        
+        edges = seq(min(x), max(x), length = N[i])
+        hp <- hist(x, breaks = edges, plot = FALSE)
+        ki <- hp$counts
+        
+        k <- mean(ki)
+        v <- sum((ki - k) ^ 2)/N[i]
+        
+        C[i] <- (2*k - v)/D[i] ^ 2	#Cost Function
+    }
+    
+    idx <- which.min(C)
+    # optD <- D[idx]
+    return(N[idx])
+    
+    # edges <- seq(min(x), max(x), length = N[idx])
+    # h = hist(x, breaks = edges)
+    # rug(x)
+    
+    # return(h)
 }
