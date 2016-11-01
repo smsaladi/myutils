@@ -18,7 +18,7 @@ write_dataset <-
             columns <- columns[columns$names %in% as.character(feature_select),]
             df_to_write <- subset(df_to_write, select = as.character(columns))
         }
-        
+
         if (!csv) {
             save_cols <- df_to_write %>% select_(outcome_col, query_col)
             df_to_write <- df_to_write %>%
@@ -28,13 +28,13 @@ write_dataset <-
                 data.frame %>%
                 bind_cols(save_cols, .)
         }
-        
+
         if (!is.null(feature_select) && !features_for_training) {
             columns <- data.frame(names = colnames(df_to_write))
             columns <- columns[columns$names %in% as.character(feature_select),]
             df_to_write <- subset(df_to_write, select = as.character(columns))
         }
-        
+
         if (csv) {
             data_fn <- paste0(filename, '.csv')
             write.csv(df_to_write, file = data_fn, row.names = FALSE,
@@ -109,9 +109,9 @@ fd_bw <- function(x) {
 # http://stats.stackexchange.com/a/143447/62183
 nclass.FD <- function(x) {
     h <- stats::IQR(x)
-    if (h == 0) 
+    if (h == 0)
         h <- stats::mad(x, constant = 2)
-    if (h > 0) 
+    if (h > 0)
         ceiling(diff(range(x))/(2 * h * length(x) ^ (-1/3)))
     else
         1L
@@ -235,7 +235,7 @@ calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
                          score_col = "score", method = "auc") {
     foreach(this_group = data %>% distinct_(grouping_col) %>% unlist,
             .combine = bind_rows, .multicombine = TRUE) %dopar% {
-                
+
         this_subset <- data[data[, grouping_col] %>% unlist == this_group, ]
         thresholds <- this_subset[, outcome_col] %>%
             unlist %>% unique %>% rem_extrema(max = FALSE)
@@ -244,7 +244,7 @@ calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
         foreach(this_threshold = thresholds,
                 .combine = bind_rows, .multicombine = TRUE) %do% {
             # take all activities greater than the current one as true
-            this_response <- 
+            this_response <-
                 this_subset[, outcome_col] %>% unlist >= this_threshold
             this_perc_rank <- perc_rank_single(
                 this_subset[, outcome_col] %>% unlist, this_threshold)
@@ -260,7 +260,7 @@ calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
                     predictor = this_subset[, score_col] %>% unlist,
                     direction = "<",
                     method = "delong")
-                results_df %>% 
+                results_df %>%
                     mutate(count = nrow(this_subset),
                            pos_count = sum(this_response),
                            lower95 = ci_obj[[1]],

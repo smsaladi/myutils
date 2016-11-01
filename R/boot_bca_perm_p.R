@@ -25,7 +25,7 @@ shuff_cor_pval <- function(index, data, x_col, y_col, SUMMARY_FUN) {
 calc_pval <- function(orig_df, shuf, x_col, y_col, SUMMARY_FUN) {
     stat <- SUMMARY_FUN(orig_df[, x_col] %>% unlist,
                         orig_df[, y_col] %>% unlist)
-    
+
     # adjustment to account for the original data that does meet the criteria
     perm_p <- (sum(shuf >= stat) + 1) / (length(shuf) + 1)
     names(perm_p) <- "perm_p"
@@ -34,13 +34,13 @@ calc_pval <- function(orig_df, shuf, x_col, y_col, SUMMARY_FUN) {
 
 #' @export
 boot_perm <- function(data, x_col = "score", y_col = "outcome",
-                      fn_prefix, count, cores, SUMMARY_FUN = cor_spear, 
+                      fn_prefix, count, cores, SUMMARY_FUN = cor_spear,
                       force = FALSE) {
     # check if outcome is saved
     boot_perm_summary_fn <- paste0(fn_prefix, "_cor_summary.rds")
     if (file.exists(boot_perm_summary_fn) & !(force))
         return(readRDS(boot_perm_summary_fn))
-    
+
     # bootstrapping
     boot_data <- boot(data = data[, c(x_col, y_col)],
                       statistic = boot_cor, R = count,
@@ -51,7 +51,7 @@ boot_perm <- function(data, x_col = "score", y_col = "outcome",
     boot_ci <- boot.ci(boot_data, type = "bca")
     rm(boot_data)
     gc()
-    
+
     # permutation testing
     shuf_data_stat <- mclapply(seq(count), shuff_cor_pval,
                                data = data[, c(x_col, y_col)],
@@ -72,7 +72,7 @@ boot_perm <- function(data, x_col = "score", y_col = "outcome",
                bca_low = bca[[4]],
                bca_high = bca[[5]],
                perm_p = perm_p)
-    
+
     saveRDS(result, boot_perm_summary_fn)
-    result 
+    result
 }
