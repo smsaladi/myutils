@@ -4,6 +4,10 @@
 #' @import ggplot2
 #' @importFrom foreach foreach
 
+#' @export
+fmt_cnt <- function(pos, all)
+    paste0(round(pos/all*100), '%/', all)
+
 # necessary for PPV (e.g. Figure 2B)
 #' @export
 prep_for_polygon <-
