@@ -6,6 +6,7 @@
 #' @importFrom pROC roc ci.auc
 #' @importFrom foreach foreach
 #' @importFrom grid polygonGrob
+#' @importFrom DescTools KendallTauA
 
 ## Used for model training
 #' @export
@@ -54,32 +55,10 @@ write_dataset <-
 count_uniq <- function(x)
     length(unique(x))
 
-## Used for model training
 #' @export
-calc_performance <- function(df, score_col, outcome_col,
-                             subgrp_col, group_col) {
-    cor_df <- foreach(thisgrouping = unique(df[, subgrp_col] %>% unlist),
-                      .combine = bind_rows, .multicombine = TRUE) %dopar% {
-                          thisgroup <- filter(df, grouping == thisgrouping)
-                          pairs <- ConDis.matrix2(thisgroup[, score_col] %>%
-                                                      unlist,
-                                                  thisgroup[, outcome_col] %>%
-                                                      unlist)
-                          data.frame(subgrp_col = thisgrouping,
-                                     group_col = unique(thisgroup[, group_col] %>%
-                                                            unlist),
-                                     table(pairs))
-                      } %>%
-        dcast(group_col + subgrp_col ~ pairs, value.var = "Freq")
-    colnames(cor_df) <- c(group_col, subgrp_col,
-                          "disconcor", "invalid", "concor")
-    cor_df %>%
-        mutate(total = disconcor + concor) %>%
-        group_by_(group_col) %>%
-        summarize(concor = sum(concor, na.rm = TRUE),
-                  disconcor = sum(disconcor, na.rm = TRUE),
-                  total = sum(total, na.rm = TRUE),
-                  kendall = (concor - disconcor)/total)
+replace_all_na <- function(df, repl = 0) {
+    df[is.na(df)] <- repl
+    df
 }
 
 # http://stackoverflow.com/a/12135122/2320823
@@ -130,20 +109,22 @@ level_ranks <- function(x, extra_starting_level = FALSE) {
     map_df$new[match(x, map_df$old)]
 }
 
-# modified from from asbio::ConDis.matrix
-# http://www.inside-r.org/packages/cran/asbio/docs/ConDis.matrix
-ConDis.matrix2 <- function(Y1, Y2)
-{
-    n <- length(Y1)
-    foreach(i = 1:n, .combine = c) %dopar% {
-        # changed bounds from 1:n to i:n
-        foreach(j = i:n, .combine = c) %:% {
-            ifelse((Y1[i] > Y1[j] & Y2[i] > Y2[j]) |
-                       (Y1[i] < Y1[j] & Y2[i] < Y2[j]), 1,
-                   ifelse((Y1[i] < Y1[j] & Y2[i] > Y2[j]) |
-                              (Y1[i] > Y1[j] & Y2[i] < Y2[j]), -1, 0))
-        }
-    }
+#' returns concordant - disconcordant pairs
+#' number of pairs
+#' @export
+ConDis_fast <- function(Y1, Y2) {
+    Y1 <- unlist(Y1, use.names = FALSE)
+    Y2 <- unlist(Y2, use.names = FALSE)
+    # pairwise complete obs
+    keep <- !(is.na(Y1) | is.na(Y2))
+    Y1 <- Y1[keep]
+    Y2 <- Y2[keep]
+    # use KendallTauA since this is how SVMrank would have been calculated
+    kendall <- KendallTauA(Y1, Y2)
+    n <- length(Y1) * (length(Y1) - 1) / 2
+    data_frame(kendall = kendall,
+               con_dis = kendall * n,
+               valid_count = n)
 }
 
 # analytic method (didn't end up using this)
@@ -255,17 +236,23 @@ calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
                                  outcome_percentile = this_perc_rank)
 
             if (method == "auc") {
-                ci_obj <- ci.auc(
-                    response = this_response,
-                    predictor = this_subset[, score_col] %>% unlist,
-                    direction = "<",
-                    method = "delong")
+                roc_obj <- roc(response = this_response,
+                           predictor = this_subset[, score_col] %>% unlist,
+                           direction = "<")
+                ci_obj <- ci.auc(roc_obj, method = "delong")
+                bestCI <- coords(roc_obj, "best", ret = c(
+                        "threshold", "specificity", "sensitivity", "ppv"))
+                pval <- power.roc.test(roc_obj)$power
                 results_df %>%
                     mutate(count = nrow(this_subset),
                            pos_count = sum(this_response),
                            lower95 = ci_obj[[1]],
                            auc = ci_obj[[2]],
-                           upper95 = ci_obj[[3]])
+                           upper95 = ci_obj[[3]],
+                           best_thresh = bestCI[["threshold"]],
+                           best_spec = bestCI[["specificity"]],
+                           best_sens = bestCI[["sensitivity"]],
+                           pval = pval)
             } else if (method == "roc") {
                 results_df %>%
                     data.frame(my_roc(response = this_response,
