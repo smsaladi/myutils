@@ -8,48 +8,44 @@
 #' @importFrom grid polygonGrob
 #' @importFrom DescTools KendallTauA
 
-## Used for model training
+#' Used for model training
+#' groups should be specified within the dataframe provided
+#' using dplyr (i.e., group_by(df))
 #' @export
-write_dataset <-
-    function(df_to_write, filename, outcome_col = "outcome", query_col = "qid",
-             csv = FALSE, feature_select = NULL, features_for_training = FALSE)
-    {
-        if (!is.null(feature_select) && features_for_training) {
-            columns <- data.frame(names = colnames(df_to_write))
-            columns <- columns[columns$names %in% as.character(feature_select),]
-            df_to_write <- subset(df_to_write, select = as.character(columns))
-        }
+write_dataset <- function(df, filename, outcome_col = "outcome") {
+    data_fn <- paste0(filename, '.svmlight')
 
-        if (!csv) {
-            save_cols <- df_to_write %>% select_(outcome_col, query_col)
-            df_to_write <- df_to_write %>%
-                select(-one_of(outcome_col, query_col)) %>%
-                as.matrix %>%
-                svmlight.file %>%
-                data.frame %>%
-                bind_cols(save_cols, .)
-        }
+    save_cols <- df %>%
+        ungroup %>%
+        mutate(qid = group_indices(df)) %>%
+        arrange(qid) %>%
+        mutate(qid = paste0("qid:", qid))  %>%
+        select(one_of(outcome_col, "qid"))
+    
+    group_cols <- groups(df) %>%
+        sapply(deparse)
+    
+    df %>%
+        ungroup %>%
+        # remove outcome and grouping cols
+        select(-one_of(outcome_col, group_cols)) %>%
+        # cast all into numeric
+        as.matrix %>%
+        # transform into SVMlight format
+        svmlight.file %>%
+        as_data_frame %>%
+        bind_cols(save_cols, .) %>%
+        write.table(file = data_fn, row.names = FALSE,
+                    col.names = FALSE, quote = FALSE)
+    
+    # remove missing feature NA's
+    c("perl -p -i -e 's/ \\d+:NA//g'",
+      "perl -p -i -e 's/ \\d+:NaN//g'") %>%
+        paste(data_fn) %>%
+        lapply(system)
 
-        if (!is.null(feature_select) && !features_for_training) {
-            columns <- data.frame(names = colnames(df_to_write))
-            columns <- columns[columns$names %in% as.character(feature_select),]
-            df_to_write <- subset(df_to_write, select = as.character(columns))
-        }
-
-        if (csv) {
-            data_fn <- paste0(filename, '.csv')
-            write.csv(df_to_write, file = data_fn, row.names = FALSE,
-                      quote = FALSE)
-            data_fn
-        } else {
-            data_fn <- paste0(filename, '.svmlight')
-            write.table(df_to_write, file = data_fn, row.names = FALSE,
-                        col.names = FALSE, quote = FALSE)
-            system(paste("perl -p -i -e 's/ \\d+:NA//g'", data_fn))
-            system(paste("perl -p -i -e 's/ \\d+:NaN//g'", data_fn))
-            data_fn
-        }
-    }
+    data_fn
+}
 
 #' @export
 count_uniq <- function(x)
