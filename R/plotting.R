@@ -192,6 +192,26 @@ geom_violin2 <- function(mapping = NULL, data = NULL, stat = "ydensity",
 }
 
 #' @export
+geom_violin2 <- function(mapping = NULL, data = NULL, stat = "ydensity",
+                         draw_quantiles = NULL, position = "dodge",
+                         trim = TRUE, scale = "area",
+                         na.rm = FALSE, show.legend = NA, inherit.aes = TRUE,
+                         ...) {
+    layer(data = data,
+          mapping = mapping,
+          stat = stat,
+          geom = GeomViolin2,
+          position = position,
+          show.legend = show.legend,
+          inherit.aes = inherit.aes,
+          params = list(trim = trim,
+                        scale = scale,
+                        draw_quantiles = draw_quantiles,
+                        na.rm = na.rm,
+                        ...))
+}
+
+#' @export
 find_cell <- function(table, row, col, name="core-fg") {
     l <- table$layout
     which(l$t == row & l$l == col & l$name == name)
@@ -624,7 +644,7 @@ ggcorr <- function(data, method = c("pairwise", "pearson"), cor_matrix = NULL,
     if (!is.null(diagColors)) {
         textData <- left_join(textData, diagColors, by = c("x" = "feature"))
     }
-    print(textData)
+    #print(textData)
     if (!is.numeric(layout.exp) || layout.exp < 0) {
         stop("incorrect layout.exp value")
     }
