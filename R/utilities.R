@@ -15,25 +15,29 @@
 write_dataset <- function(df, filename, outcome_col = "outcome") {
     data_fn <- paste0(filename, '.svmlight')
 
-    save_cols <- df %>%
-        ungroup %>%
-        mutate(qid = group_indices(df)) %>%
-        arrange(qid) %>%
-        mutate(qid = paste0("qid:", qid))  %>%
-        select(one_of(outcome_col, "qid"))
+    df$qid <- group_indices(df)
     
     group_cols <- groups(df) %>%
         sapply(deparse)
+
+    df %<>%
+        ungroup %>%
+        arrange(qid) %>%
+        mutate(qid = paste0("qid:", qid)) %>%
+        select(-one_of(group_cols))
+    
+    save_cols <- df %>%
+        select(one_of(outcome_col, "qid"))
     
     df %>%
         ungroup %>%
         # remove outcome and grouping cols
-        select(-one_of(outcome_col, group_cols)) %>%
+        select(-one_of(outcome_col, "qid")) %>%
         # cast all into numeric
         as.matrix %>%
         # transform into SVMlight format
         svmlight.file %>%
-        as_data_frame %>%
+        as_tibble %>%
         bind_cols(save_cols, .) %>%
         write.table(file = data_fn, row.names = FALSE,
                     col.names = FALSE, quote = FALSE)
