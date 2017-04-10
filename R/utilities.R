@@ -1,14 +1,16 @@
-# A set of functions written to make data munging and preparation easier
+#' A set of functions written to make data munging and preparation easier
+#' @author Shyam Saladi, \email{saladi@@caltech.edu}
 #' @import magrittr
 #' @import tidyverse
 #' @import caret
 #' @import data.table
 #' @importFrom pROC roc ci.auc
 #' @importFrom foreach foreach
-#' @importFrom grid polygonGrob
-#' @importFrom DescTools KendallTauA
+#' 
+NULL
 
 #' Used for model training
+#' 
 #' groups should be specified within the dataframe provided
 #' using dplyr (i.e., group_by(df))
 #' @export
@@ -119,12 +121,12 @@ ConDis_fast <- function(Y1, Y2) {
     keep <- !(is.na(Y1) | is.na(Y2))
     Y1 <- Y1[keep]
     Y2 <- Y2[keep]
-    # use KendallTauA since this is how SVMrank would have been calculated
-    kendall <- KendallTauA(Y1, Y2)
-    n <- length(Y1) * (length(Y1) - 1) / 2
-    data_frame(kendall = kendall,
-               con_dis = kendall * n,
-               valid_count = n)
+    # This is how SVMrank would have calculated kendall's tau
+    pairs <- DescTools::ConDisPairs(table(Y1, Y2))
+    count <- pairs$C + pairs$D
+    data_frame(valid_count = count,
+               con = pairs$C,
+               dis = pairs$D)
 }
 
 # analytic method (didn't end up using this)

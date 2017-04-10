@@ -16,4 +16,3 @@ ggcorr(data, method = c("pairwise", "pearson"), cor_matrix = NULL,
 \description{
 modified from GGally package
 }
-

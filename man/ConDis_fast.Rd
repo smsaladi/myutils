@@ -11,4 +11,3 @@ ConDis_fast(Y1, Y2)
 returns concordant - disconcordant pairs
 number of pairs
 }
-

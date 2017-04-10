@@ -104,7 +104,7 @@ GeomPolygon2 <-
                     first_idx <- !duplicated(munched$group)
                     first_rows <- munched[first_idx, ]
                     ggplot2:::ggname("geom_polygon",
-                                     polygonGrob(
+                                     grid::polygonGrob(
                                          munched$x,
                                          munched$y,
                                          default.units = "native",

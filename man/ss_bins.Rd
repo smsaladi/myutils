@@ -15,4 +15,3 @@ Department of Physics, Kyoto University
 shimazaki at ton.scphys.kyoto-u.ac.jp
 http://toyoizumilab.brain.riken.jp/hideaki/res/histogram.html
 }
-
