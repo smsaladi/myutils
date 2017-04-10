@@ -4,7 +4,7 @@
 #' @import tidyverse
 #' @import caret
 #' @import data.table
-#' @importFrom pROC roc ci.auc
+#' @importFrom pROC roc ci.auc coords power.roc.test
 #' @importFrom foreach foreach
 #' 
 NULL
