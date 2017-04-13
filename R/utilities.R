@@ -214,55 +214,52 @@ perc_rank_single <- function(x, xo) {
 }
 
 #' @export
-calc_auc_roc <- function(data, grouping_col, outcome_col = "outcome",
-                         score_col = "score", method = "auc") {
-    foreach(this_group = data %>% distinct_(grouping_col) %>% unlist,
-            .combine = bind_rows, .multicombine = TRUE) %dopar% {
-
-        this_subset <- data[data[, grouping_col] %>% unlist == this_group, ]
-        thresholds <- this_subset[, outcome_col] %>%
-            unlist %>% unique %>% rem_extrema(max = FALSE)
-
-        # within each grouping and go through each activity
-        foreach(this_threshold = thresholds,
-                .combine = bind_rows, .multicombine = TRUE) %do% {
+calc_auc_roc <- function(df, method = "auc") {
+    df %>%
+        mutate(count = n(),
+               outcome_percentile = percent_rank(outcome)*100) %>%
+        filter(outcome != min(outcome)) %>%
+        distinct(outcome, outcome_percentile, count) %>%
+        rowwise() %>%
+        # go through activities
+        do({
+            thresh <- .
             # take all activities greater than the current one as true
-            this_response <-
-                this_subset[, outcome_col] %>% unlist >= this_threshold
-            this_perc_rank <- perc_rank_single(
-                this_subset[, outcome_col] %>% unlist, this_threshold)
-
-            results_df <- tibble(grouping_col = grouping_col,
-                                 group = this_group,
-                                 outcome_threshold = this_threshold,
-                                 outcome_percentile = this_perc_rank)
-
+            this_response <- df$outcome >= thresh$outcome
+            this_score <- df$score
+            
             if (method == "auc") {
                 roc_obj <- roc(response = this_response,
-                           predictor = this_subset[, score_col] %>% unlist,
-                           direction = "<")
+                               predictor = this_score,
+                               direction = "<")
                 ci_obj <- ci.auc(roc_obj, method = "delong")
-                bestCI <- coords(roc_obj, "best", ret = c(
-                        "threshold", "specificity", "sensitivity", "ppv"))
+                
+                ci_feats <- c("threshold", "specificity", "sensitivity", "ppv")
+                bestCI <- coords(roc_obj, "best", ret = ci_feats)
+                
                 pval <- power.roc.test(roc_obj)$power
-                results_df %>%
-                    mutate(count = nrow(this_subset),
-                           pos_count = sum(this_response),
+                
+                thresh %>%
+                    as_tibble %>%
+                    mutate(pos_count = sum(this_response),
                            lower95 = ci_obj[[1]],
                            auc = ci_obj[[2]],
                            upper95 = ci_obj[[3]],
-                           best_thresh = bestCI[["threshold"]],
-                           best_spec = bestCI[["specificity"]],
-                           best_sens = bestCI[["sensitivity"]],
+                           best_thresh = tryCatch({bestCI[["threshold"]]},
+                                                  error = function(x) NA),
+                           best_spec = tryCatch({bestCI[["specificity"]]},
+                                                error = function(x) NA),
+                           best_sens = tryCatch({bestCI[["sensitivity"]]},
+                                                error = function(x) NA),
                            pval = pval)
             } else if (method == "roc") {
-                results_df %>%
-                    data.frame(my_roc(response = this_response,
-                               predictor = this_subset[, score_col] %>% unlist,
-                               direction = "<"))
+                my_roc(response = this_response,
+                       predictor = this_score,
+                       direction = "<") %>%
+                    mutate(outcome = thresh$outcome,
+                           outcome_percentile = thresh$outcome_percentile)
             }
-        }
-    }
+        })
 }
 
 #' @export
@@ -275,29 +272,22 @@ find_closest <- function(col, vals) {
 
 #' @export
 my_roc <- function(...) {
-    pROC_outcome <- roc(...)
-    pROC_outcome$ppv <- foreach(thisthreshold = pROC_outcome$thresholds,
-                                .combine = c, .multicombine = TRUE) %dopar% {
-        truepos <- sum(pROC_outcome$cases >= thisthreshold)
-        predpos <-
-            sum(c(pROC_outcome$cases, pROC_outcome$controls) >= thisthreshold)
-        truepos/predpos
-    }
-    pROC_outcome$npv <- foreach(thisthreshold = pROC_outcome$thresholds,
-                                .combine = c, .multicombine = TRUE) %dopar% {
-        trueneg <- sum(pROC_outcome$controls <= thisthreshold)
-        predneg <-
-            sum(c(pROC_outcome$cases, pROC_outcome$controls) <= thisthreshold)
-        trueneg/predneg
-    }
-    pROC_outcome$threshold_percentiles <- percent_rank(pROC_outcome$thresholds)
-    pROC_outcome$min_ppv <- length(pROC_outcome$cases) /
-        (length(pROC_outcome$cases) + length(pROC_outcome$controls))
-    pROC_outcome$min_npv <- length(pROC_outcome$controls) /
-        (length(pROC_outcome$cases) + length(pROC_outcome$controls))
-    #    pROC_outcome$pos_count <- length(pROC_outcome$cases)
-    pROC_outcome[c("thresholds", "threshold_percentiles", "sensitivities",
-                   "specificities", "ppv", "min_ppv", "npv", "min_npv")]
+    pROC_out <- roc(...)
+    
+    pROC_out %$%
+        data_frame(sensitivities, specificities, thresholds) %>%
+        rowwise() %>%
+        mutate(truepos = sum(pROC_out$cases >= thresholds),
+               predpos = sum(c(pROC_out$cases, pROC_out$controls) >= thresholds),
+               trueneg = sum(pROC_out$controls <= thresholds),
+               predneg = sum(c(pROC_out$cases, pROC_out$controls) <= thresholds)) %>%
+        ungroup() %>%
+        mutate(threshold_percentiles = percent_rank(thresholds),
+               ppv = truepos/predpos,
+               min_ppv = min(ppv, na.rm = TRUE),
+               npv = trueneg/predneg,
+               min_npv = min(npv, na.rm = TRUE)) %>%
+        select(-truepos, -predpos, -trueneg, -predneg)
 }
 
 #' @export
