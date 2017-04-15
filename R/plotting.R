@@ -8,42 +8,43 @@
 fmt_cnt <- function(pos, all)
     paste0(round(pos/all*100), '%/', all)
 
+
+desc_ <- function(x) {
+    lazyeval::interp(~desc(var), var = as.name(x))
+}
+
 # necessary for PPV (e.g. Figure 2B)
 #' @export
-prep_for_polygon <-
-    function(df, x = "thresholds", y = "ppv", min_y = "min_ppv") {
+prep_for_polygon <- function(df, x = "thresholds", y = "ppv", min_y = NA) {
     # order by thresholds
-    df <- df[order(df[,x], decreasing = TRUE),]
-
+    df %<>%
+        as.data.frame() %>%
+        arrange_(desc_(x))
+        
     # min y value
-    min_y_val <- df[, min_y][1]
+    if (is.na(min_y)) {
+        min_y <- tail(df[, y], 1)
+    }
 
     # top of polygon
-    df$y_greater_min <- df[,y] > min_y_val
+    df$y_greater_min <- df[,y] > min_y
     df <- df[seq_len(nrow(df)) %>% rep(each = 2L) %>% tail(-1L) %>% head(-1L),]
     rownames(df) <- seq(length = nrow(df))
-    df$id <-  rep(seq(nrow(df)/2), each = 2L)
+    df$id <- rep(seq(nrow(df)/2), each = 2L)
     df$type <- y
 
     # bottom of polygon
     df <- df[rep(seq_len(nrow(df)), each = 2L),]
-    df[grepl(".1", rownames(df), fixed = TRUE),]$type <- min_y
-    df[df$type == min_y, y] <- min_y_val
+    df[grepl(".1", rownames(df), fixed = TRUE),]$type <- "min_y"
+    df[df$type == "min_y", y] <- min_y
 
-    # order for geom_polygon (needs to be closed)
-    foreach(thisid = unique(df$id),
-            .combine = bind_rows, .multicombine = TRUE) %do% {
-        thisdata <- filter(df, id == thisid)
-        thisdata <-
-            thisdata[order(thisdata[, x], thisdata[,y], decreasing = TRUE),]
-        bind_rows(thisdata[1L,], thisdata[2L,], thisdata[4L,], thisdata[3L,])
-    }
-    # df %>%
-    #     group_by(id) %>%
-    #     do({
-    #         thisdata <- .[order(.[, x], .[,y], decreasing = TRUE),]
-    #         bind_rows(thisdata[1,], thisdata[2,], thisdata[4,], thisdata[3,])
-    #     })
+    # order paths correctly
+    df %>%
+        group_by(id) %>%
+        do({
+            arrange_(., desc_(x), desc_(y)) %>%
+                (function(x) x[c(1, 2, 4, 3), ])
+        })
 }
 
 
