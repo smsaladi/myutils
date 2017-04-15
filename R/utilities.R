@@ -111,6 +111,18 @@ level_ranks <- function(x, extra_starting_level = FALSE) {
     map_df$new[match(x, map_df$old)]
 }
 
+# function to split groups in a grouped_df
+#' @export
+split_groups <- function(df) {
+        do(df, {
+            df_sub <- .
+            groups(df) %>%
+                lapply(function(x) distinct_(df_sub, x)) %>%
+                bind_cols %>%
+                bind_rows(df_sub, .)
+        })
+}
+
 #' returns concordant - disconcordant pairs
 #' number of pairs
 #' @export
@@ -216,10 +228,10 @@ perc_rank_single <- function(x, xo) {
 #' @export
 calc_auc_roc <- function(df, method = "auc") {
     df %>%
-        mutate(count = n(),
-               outcome_percentile = percent_rank(outcome)*100) %>%
+        mutate(count = n()) %>%
+        distinct(outcome, count) %>%
+        mutate(outcome_percentile = percent_rank(outcome)*100) %>%
         filter(outcome != min(outcome)) %>%
-        distinct(outcome, outcome_percentile, count) %>%
         rowwise() %>%
         # go through activities
         do({
@@ -229,29 +241,42 @@ calc_auc_roc <- function(df, method = "auc") {
             this_score <- df$score
             
             if (method == "auc") {
+                thresh %<>%
+                    as_tibble %>%
+                    mutate(pos_count = sum(this_response),
+                           neg_count = sum(!this_response))
+                
+                # no positive cases
+                if (thresh$pos_count == 0 || thresh$neg_count == 0)
+                    return(thresh)
+
                 roc_obj <- roc(response = this_response,
                                predictor = this_score,
                                direction = "<")
-                ci_obj <- ci.auc(roc_obj, method = "delong")
                 
-                ci_feats <- c("threshold", "specificity", "sensitivity", "ppv")
-                bestCI <- coords(roc_obj, "best", ret = ci_feats)
+                bestCI <- c("threshold", "specificity", "sensitivity", "ppv") %>%
+                    coords(roc_obj, "best", ret = .)
+                power <- power.roc.test(roc_obj)$power
                 
-                pval <- power.roc.test(roc_obj)$power
-                
-                thresh %>%
-                    as_tibble %>%
-                    mutate(pos_count = sum(this_response),
-                           lower95 = ci_obj[[1]],
-                           auc = ci_obj[[2]],
-                           upper95 = ci_obj[[3]],
+                thresh %<>%
+                    mutate(auc = as.numeric(roc_obj$auc),
                            best_thresh = tryCatch({bestCI[["threshold"]]},
                                                   error = function(x) NA),
                            best_spec = tryCatch({bestCI[["specificity"]]},
                                                 error = function(x) NA),
                            best_sens = tryCatch({bestCI[["sensitivity"]]},
                                                 error = function(x) NA),
-                           pval = pval)
+                           power = power)
+                
+                # only one case
+                if (thresh$pos_count == 1 || thresh$neg_count == 1)
+                    return(thresh)
+                
+                ci_obj <- ci.auc(roc_obj, method = "delong")
+                
+                thresh %>%
+                    mutate(lower95 = ci_obj[[1]],
+                           upper95 = ci_obj[[3]])
             } else if (method == "roc") {
                 my_roc(response = this_response,
                        predictor = this_score,
@@ -259,7 +284,8 @@ calc_auc_roc <- function(df, method = "auc") {
                     mutate(outcome = thresh$outcome,
                            outcome_percentile = thresh$outcome_percentile)
             }
-        })
+        }) %>%
+        ungroup
 }
 
 #' @export
