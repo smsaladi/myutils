@@ -22,7 +22,9 @@ prep_for_polygon <- function(df, x = "thresholds", y = "ppv", min_y = NA) {
         
     # min y value
     if (is.na(min_y)) {
-        min_y <- tail(df[, y], 1)
+        min_y <- df %>%
+            filter(thresholds == min(thresholds, na.rm = TRUE)) %$%
+            tail(ppv, 1)
     }
 
     # top of polygon

@@ -87,6 +87,13 @@ nclass.FD <- function(x) {
         1L
 }
 
+ppv_from_sens <- function(pos, neg, sens, spec) {
+    A = pos * sens
+    D = neg * spec
+    B = neg - D
+    A / (A + B)
+}
+
 #' @export
 level_ranks <- function(x, extra_starting_level = FALSE) {
     x <- as.numeric(factor(x))
@@ -297,11 +304,12 @@ my_roc <- function(...) {
                trueneg = sum(pROC_out$controls <= thresholds),
                predneg = sum(c(pROC_out$cases, pROC_out$controls) <= thresholds)) %>%
         ungroup() %>%
+        arrange(thresholds) %>%
         mutate(threshold_percentiles = percent_rank(thresholds),
                ppv = truepos/predpos,
-               min_ppv = min(ppv, na.rm = TRUE),
+               min_ppv = ppv[[1]],
                npv = trueneg/predneg,
-               min_npv = min(npv, na.rm = TRUE)) %>%
+               min_npv = npv[[1]]) %>%
         select(-truepos, -predpos, -trueneg, -predneg)
 }
 
