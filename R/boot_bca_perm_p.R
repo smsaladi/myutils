@@ -1,12 +1,8 @@
 # A set of functions written to make data munging and preparation easier
-#' @import magrittr
-#' @import tidyverse
-#' @import boot
-#' @import parallel
 
 # summary metric of interest
-cor_spear <- purrr::partial(cor, method = "spearman",
-                            use = "pairwise.complete.obs")
+cor_spear <- partial(cor, method = "spearman",
+                     use = "pairwise.complete.obs")
 
 # single bootstrap for confidence intervals
 boot_cor <- function(data, indices, x_col, y_col, SUMMARY_FUN) {

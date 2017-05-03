@@ -2,7 +2,6 @@
 #' @import grid
 #' @import magrittr
 #' @import ggplot2
-#' @importFrom foreach foreach
 
 #' @export
 fmt_cnt <- function(pos, all)

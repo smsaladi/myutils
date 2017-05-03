@@ -1,16 +1,5 @@
-#' A set of functions written to make data munging and preparation easier
-#' @author Shyam Saladi, \email{saladi@@caltech.edu}
-#' @import magrittr
-#' @import tidyverse
-#' @import caret
-#' @import data.table
-#' @importFrom pROC roc ci.auc coords power.roc.test
-#' @importFrom foreach foreach
-#' 
-NULL
-
 #' Used for model training
-#' 
+#'
 #' groups should be specified within the dataframe provided
 #' using dplyr (i.e., group_by(df))
 #' @export
@@ -18,7 +7,7 @@ write_dataset <- function(df, filename, outcome_col = "outcome") {
     data_fn <- paste0(filename, '.svmlight')
 
     df$qid <- group_indices(df)
-    
+
     group_cols <- groups(df) %>%
         sapply(deparse)
 
@@ -27,10 +16,10 @@ write_dataset <- function(df, filename, outcome_col = "outcome") {
         arrange(qid) %>%
         mutate(qid = paste0("qid:", qid)) %>%
         select(-one_of(group_cols))
-    
+
     save_cols <- df %>%
         select(one_of(outcome_col, "qid"))
-    
+
     df %>%
         ungroup %>%
         # remove outcome and grouping cols
@@ -43,7 +32,7 @@ write_dataset <- function(df, filename, outcome_col = "outcome") {
         bind_cols(save_cols, .) %>%
         write.table(file = data_fn, row.names = FALSE,
                     col.names = FALSE, quote = FALSE)
-    
+
     # remove missing feature NA's
     c("perl -p -i -e 's/ \\d+:NA//g'",
       "perl -p -i -e 's/ \\d+:NaN//g'") %>%
@@ -239,13 +228,13 @@ calc_auc_roc <- function(df, method = "auc") {
             # take all activities greater than the current one as true
             this_response <- df$outcome >= thresh$outcome
             this_score <- df$score
-            
+
             if (method == "auc") {
                 thresh %<>%
                     as_tibble %>%
                     mutate(pos_count = sum(this_response),
                            neg_count = sum(!this_response))
-                
+
                 # no positive cases
                 if (thresh$pos_count == 0 || thresh$neg_count == 0)
                     return(thresh)
@@ -253,11 +242,11 @@ calc_auc_roc <- function(df, method = "auc") {
                 roc_obj <- roc(response = this_response,
                                predictor = this_score,
                                direction = "<")
-                
+
                 bestCI <- c("threshold", "specificity", "sensitivity", "ppv") %>%
                     coords(roc_obj, "best", ret = .)
                 power <- power.roc.test(roc_obj)$power
-                
+
                 thresh %<>%
                     mutate(auc = as.numeric(roc_obj$auc),
                            best_thresh = tryCatch({bestCI[["threshold"]]},
@@ -267,13 +256,13 @@ calc_auc_roc <- function(df, method = "auc") {
                            best_sens = tryCatch({bestCI[["sensitivity"]]},
                                                 error = function(x) NA),
                            power = power)
-                
+
                 # only one case
                 if (thresh$pos_count == 1 || thresh$neg_count == 1)
                     return(thresh)
-                
+
                 ci_obj <- ci.auc(roc_obj, method = "delong")
-                
+
                 thresh %>%
                     mutate(lower95 = ci_obj[[1]],
                            upper95 = ci_obj[[3]])
@@ -299,7 +288,7 @@ find_closest <- function(col, vals) {
 #' @export
 my_roc <- function(...) {
     pROC_out <- roc(...)
-    
+
     pROC_out %$%
         data_frame(sensitivities, specificities, thresholds) %>%
         rowwise() %>%
