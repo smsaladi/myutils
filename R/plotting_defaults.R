@@ -7,7 +7,13 @@ geom_abline <- partial(ggplot2::geom_abline, size = 0.25, linetype = "dashed")
 geom_hline <- partial(ggplot2::geom_hline, size = 0.25, linetype = "dashed")
 
 #' @export
+geom_vline <- partial(ggplot2::geom_vline, size = 0.25, linetype = "dashed")
+
+#' @export
 geom_path <- partial(ggplot2::geom_path, lineend = "round")
+
+#' @export
+geom_text <- partial(ggplot2::geom_text, size = 6*5/14)
 
 #' @export
 annotate_text <- partial(ggplot2::annotate, geom = "text", size = 6*5/14)
