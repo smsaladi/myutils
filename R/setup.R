@@ -12,7 +12,8 @@
                   legend.title = element_blank(),
                   legend.key = element_blank(),
                   legend.position = "None",
-                  plot.margin = unit(c(0, 0, 0, 0), "in")
+                  plot.margin = unit(c(0, 0, 0, 0), "in"),
+                  strip.background = element_blank()
                   )
         )
 }

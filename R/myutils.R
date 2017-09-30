@@ -8,6 +8,7 @@
 #' @docType package
 #'
 #' @import tidyverse
+#' @importFrom dplyr bind_cols
 #' @import caret
 #' @import data.table
 #' @importFrom pROC roc ci.auc coords power.roc.test
