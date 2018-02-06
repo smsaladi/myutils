@@ -244,35 +244,45 @@ calc_auc_roc <- function(df, method = "auc") {
 
                 # no positive cases
                 if (thresh$pos_count == 0 || thresh$neg_count == 0)
-                    return(thresh)
-
-                roc_obj <- roc(response = this_response,
-                               predictor = this_score,
-                               direction = "<")
-
-                bestCI <- c("threshold", "specificity", "sensitivity", "ppv") %>%
-                    coords(roc_obj, "best", ret = .)
-                power <- power.roc.test(roc_obj)$power
-
-                thresh %<>%
-                    mutate(auc = as.numeric(roc_obj$auc),
-                           best_thresh = tryCatch({bestCI[["threshold"]]},
-                                                  error = function(x) NA),
-                           best_spec = tryCatch({bestCI[["specificity"]]},
-                                                error = function(x) NA),
-                           best_sens = tryCatch({bestCI[["sensitivity"]]},
-                                                error = function(x) NA),
-                           power = power)
-
-                # only one case
-                if (thresh$pos_count == 1 || thresh$neg_count == 1)
-                    return(thresh)
-
-                ci_obj <- ci.auc(roc_obj, method = "delong")
-
-                thresh %>%
-                    mutate(lower95 = ci_obj[[1]],
-                           upper95 = ci_obj[[3]])
+                    thresh
+                else {
+                    roc_obj <- roc(response = this_response,
+                                   predictor = this_score,
+                                   direction = "<")
+                    
+                    # since coords can return more than one set
+                    # keep the one with the greatest threshold
+                    bestCI <- c("threshold", "specificity", "sensitivity", "ppv") %>%
+                        coords(roc_obj, "best", ret = ., drop = FALSE) %>%
+                        t %>%
+                        as_data_frame() %>%
+                        filter(threshold == max(threshold)) %>%
+                        magrittr::extract(1,) %>%
+                        unlist
+                    
+                    power <- power.roc.test(roc_obj)$power
+                    
+                    thresh %<>%
+                        mutate(auc = as.numeric(roc_obj$auc),
+                               best_thresh = tryCatch({bestCI["threshold"]},
+                                                      error = function(x) NA),
+                               best_spec = tryCatch({bestCI["specificity"]},
+                                                    error = function(x) NA),
+                               best_sens = tryCatch({bestCI["sensitivity"]},
+                                                    error = function(x) NA),
+                               power = power)
+                    
+                    # only one case
+                    if (thresh$pos_count == 1 || thresh$neg_count == 1) {
+                        thresh
+                    } else {
+                        ci_obj <- ci.auc(roc_obj, method = "delong")
+                        
+                        thresh %>%
+                            mutate(lower95 = ci_obj[[1]],
+                                   upper95 = ci_obj[[3]])
+                    }
+                }
             } else if (method == "roc") {
                 my_roc(response = this_response,
                        predictor = this_score,
