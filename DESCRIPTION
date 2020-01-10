@@ -7,7 +7,7 @@ Description: Provides a set of convenience utilities to support the machine
     learning project by mechanizing some tedious or repetitive tasks/code.
 Depends:
     R (>= 3.1.0)
-License: What license is it under?
+License: MIT
 Encoding: UTF-8
 LazyData: true
 Imports:
